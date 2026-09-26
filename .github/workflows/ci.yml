@@ -1,0 +1,62 @@
+name: CI
+
+on: push
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  # Debian 13 in Docker: nginx, certbot 4.0 and Node 20 from apt, against Pebble.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run e2e
+
+  # The certbot snap on the runner itself; Pebble and challtestsrv stay in Docker.
+  e2e-snap:
+    runs-on: ubuntu-24.04
+    env:
+      E2E_TARGET: host
+      E2E_SERVER_IP: 10.231.53.1
+      REQUESTS_CA_BUNDLE: ${{ github.workspace }}/test/e2e/pebble/pebble.minica.pem
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Install nginx and the certbot snap
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nginx
+          sudo snap install --classic certbot
+          # Its timer would hold certbot's lock during the tests.
+          sudo systemctl stop snap.certbot.renew.timer
+      - name: Start Pebble and challtestsrv, and point certbot and *.test at them
+        run: |
+          docker compose -f test/e2e/compose.yml up -d --wait pebble challtestsrv
+          echo "10.231.53.2 pebble" | sudo tee -a /etc/hosts
+          sudo mkdir -p /etc/letsencrypt
+          echo "server = https://pebble:14000/dir" | sudo tee /etc/letsencrypt/cli.ini
+          bridge="br-$(docker network inspect zetcert-e2e_acme -f '{{.Id}}' | cut -c1-12)"
+          sudo resolvectl dns "$bridge" 10.231.53.3
+          sudo resolvectl domain "$bridge" '~test'
+      - run: npm run e2e

@@ -1,0 +1,43 @@
+{
+  "name": "zetcert",
+  "version": "0.1.2",
+  "description": "Manages the Let's Encrypt certificates of an nginx server, on top of certbot",
+  "license": "MIT",
+  "type": "module",
+  "os": [
+    "linux"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "zetcert": "dist/zetcert.cjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "devDependencies": {
+    "@aws-sdk/client-route-53": "^3.1141.0",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^20.19.43",
+    "commander": "^14.0.3",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.11.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.70.1",
+    "vitest": "^4.1.11",
+    "yaml": "^2.9.1"
+  },
+  "scripts": {
+    "build": "node scripts/build.js",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "e2e": "vitest run --config test/e2e/vitest.config.ts",
+    "prepack": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ArmCyber/zetcert.git"
+  }
+}

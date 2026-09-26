@@ -1,0 +1,6 @@
+# Internal admin panel, not in the certificate
+server {
+    listen 127.0.0.1:8080;
+    server_name admin localhost 192.0.2.5;
+    location / { root /var/www/admin; }
+}

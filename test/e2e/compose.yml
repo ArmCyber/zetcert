@@ -1,0 +1,47 @@
+# End-to-end lab: Pebble (Let's Encrypt's test server), pebble-challtestsrv (DNS) and the server
+# under test. Nothing is published on the host.
+name: zetcert-e2e
+
+services:
+  pebble:
+    image: ghcr.io/letsencrypt/pebble:latest
+    command: ["-config", "/config/pebble.json", "-dnsserver", "10.231.53.3:53"]
+    environment:
+      PEBBLE_VA_NOSLEEP: "1"
+      PEBBLE_WFE_NONCEREJECT: "0"
+      PEBBLE_AUTHZREUSE: "0"
+    volumes:
+      - ./pebble/config.json:/config/pebble.json:ro
+    networks:
+      acme:
+        ipv4_address: 10.231.53.2
+
+  challtestsrv:
+    image: ghcr.io/letsencrypt/pebble-challtestsrv:latest
+    # Every A query is answered with the server's address, and no AAAA. In the snap CI job the
+    # server is the runner itself (E2E_SERVER_IP).
+    command:
+      ["-defaultIPv4", "${E2E_SERVER_IP:-10.231.53.4}", "-defaultIPv6", "", "-dnsserver", ":53", "-management", ":8055",
+       "-http01", "", "-https01", "", "-tlsalpn01", "", "-doh", ""]
+    networks:
+      acme:
+        ipv4_address: 10.231.53.3
+
+  server:
+    build: ./server
+    init: true
+    # zetcert's own lookups go through challtestsrv; container names still resolve through Docker.
+    dns: [10.231.53.3]
+    environment:
+      REQUESTS_CA_BUNDLE: /e2e/pebble/pebble.minica.pem
+    volumes:
+      - ./:/e2e:ro
+    networks:
+      acme:
+        ipv4_address: 10.231.53.4
+
+networks:
+  acme:
+    ipam:
+      config:
+        - subnet: 10.231.53.0/24
