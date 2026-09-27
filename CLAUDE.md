@@ -81,6 +81,7 @@ Found while building:
 - Cloudflare's zone list includes pending and moved zones unless it asks for `status=active`.
 - The AWS SDK prints a Node 20 support warning unless `AWS_SDK_JS_NODE_VERSION_SUPPORT_WARNING_DISABLED=true`; its `requestTimeout` only warns unless `throwOnRequestTimeout` is set.
 - certbot 5 (the snap, in CI) reports a failed challenge with `Identifier:` where 4.0 says `Domain:`.
+- Node 26 (libuv 1.52) `fs.copyFileSync` keeps the source's owner; Node 20 gives the copy to the running user. `copyFileAtomic` chowns the copy, or root's copy of an nvm Node stays the user's.
 - certbot's renewal files (`/etc/letsencrypt/renewal/<cert>.conf`) are ConfigObj: `[renewalparams]`, `[[webroot_map]]`, comma lists (`a,` is a one-item list). `--deploy-hook` is saved as `renew_hook`, or `deploy_hook` in newer versions.
 
 ## Working on the code

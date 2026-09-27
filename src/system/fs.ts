@@ -1,6 +1,7 @@
 // File access by the paths nginx, certbot and the config use (see paths.ts).
 import {
   chmodSync,
+  chownSync,
   closeSync,
   copyFileSync,
   fsyncSync,
@@ -152,12 +153,14 @@ export function removeFile(p: string): void {
   rmSync(onDisk(p), { force: true });
 }
 
-/** Copies a file through a temporary file and a rename, with an exact mode. */
+/** Copies a file through a temporary file and a rename, with an exact mode, owned by the running user. */
 export function copyFileAtomic(from: string, to: string, mode: number): void {
   const file = onDisk(to);
   mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.zetcert-${process.pid}.tmp`;
   copyFileSync(onDisk(resolveLinks(from)), tmp);
+  // Node 26 (libuv 1.52) keeps the source's owner, so root's copy of a user's file stayed theirs.
+  chownSync(tmp, process.geteuid?.() ?? 0, process.getegid?.() ?? 0);
   chmodSync(tmp, mode);
   renameSync(tmp, file);
 }
