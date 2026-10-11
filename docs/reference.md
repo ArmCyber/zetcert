@@ -248,6 +248,7 @@ Free: nothing is sent to Let's Encrypt. Per name, in this order, stopping at the
 | `/etc/nginx/zetcert/_ffdhe2048.pem` | 0644 | DH parameters (the RFC 7919 ffdhe2048 group) |
 | `/etc/nginx/zetcert/_acme.conf` | 0644 | ACME `location` for port-80 server blocks |
 | `/var/lib/zetcert/state.json` | 0644 | cache: skipped names, issuance history, DNS zones, last alerts; a missing or broken file counts as empty |
+| `/var/lib/zetcert/update.json` | 0644 | the [update check](#update-check): when npm last answered, and its latest version |
 | `/var/lib/zetcert/placeholder/` | key 0600 | self-signed placeholder certificate (RSA 2048, CN "zetcert placeholder") |
 | `/usr/local/lib/zetcert/` | 0755 | the system copy: `zetcert.cjs`, `node`, `install.json` |
 | `/usr/local/sbin/zetcert` | 0755 | the launcher |
@@ -325,6 +326,20 @@ Check: sudo zetcert status shop · certbot log: /var/log/letsencrypt/letsencrypt
 ```
 
 The post hook runs only when certbot tried a renewal in that run: if certbot's timer stops, no alert comes. Monitor `status --check` for that.
+
+## Update check
+
+Once a day, zetcert asks npm for its latest version (`https://registry.npmjs.org/zetcert/latest`) and saves the answer in `/var/lib/zetcert/update.json`. While that version is newer than the running one, a command's output ends with a note on stderr:
+
+```
+zetcert 0.2.0 is available (this is 0.1.3). To upgrade: npm install -g zetcert@latest, then sudo zetcert init
+```
+
+It is only a note: nothing is installed, and the command's result and exit code stay as they are.
+
+- **Only in a terminal:** there is no check and no note when stderr isn't a terminal (cron, monitoring, the certbot hooks), with `--json` or `-q`, before `init` has run, for `init` and `uninstall`, and after a command that stopped with an error.
+- **Never in the way:** npm is asked while the command runs and gets 2 seconds from its start, so a command that takes longer doesn't wait at all.
+- **No answer** (no internet, npm down, or internet only through a proxy, which the check doesn't use): nothing is shown, and the next command asks again. An answer saved earlier still counts.
 
 ## Exit codes
 

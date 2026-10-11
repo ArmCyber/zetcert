@@ -33,6 +33,10 @@ export function capture(
     stderr: { write: (t: string) => (stderr += t) },
     prompter,
     stdin: answers.stdin,
+    // Tests never ask npm itself.
+    latestVersion: async () => {
+      throw new Error('npm is unreachable in tests');
+    },
   };
   return { io, questions, stdout: () => stdout, stderr: () => stderr };
 }

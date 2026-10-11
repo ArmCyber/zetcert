@@ -4,6 +4,7 @@ import { Command, CommanderError } from 'commander';
 import { UserError } from '../system/errors';
 import { CONFIG_FILE, LAUNCHER, onDisk } from '../system/paths';
 import { isRoot } from '../system/root';
+import { type LatestVersion, startUpdateCheck } from '../system/update';
 import { VERSION } from '../version';
 import { deployHook } from '../hooks/deploy';
 import { authHook, cleanupHook } from '../hooks/dns';
@@ -55,12 +56,16 @@ export interface Io {
   initEnv?: InitEnv;
   /** Tests only: what stdin holds. */
   stdin?: string;
+  /** Tests only: asks npm for the latest version. */
+  latestVersion?: LatestVersion;
 }
 
 /** Commands that work before `init` has run. */
 const WITHOUT_INIT = new Set(['init', 'status', 'doctor', 'uninstall']);
 /** Commands called by certbot, which always use the default config path. */
 const HOOKS = new Set(['hook']);
+/** Commands that don't look for a newer zetcert: certbot's, and the ones that install and remove zetcert. */
+const WITHOUT_UPDATE_CHECK = new Set(['hook', 'init', 'uninstall']);
 
 type Handler = (ctx: Context, ...args: unknown[]) => Promise<number | void>;
 
@@ -127,12 +132,31 @@ export function buildProgram(io: Io, setExitCode: (code: number) => void): Comma
     }
   });
 
+  // A newer version is a note for a person at a terminal, never for a script or for monitoring.
+  const wantsUpdateNote = (cmd: Command, ctx: Context) =>
+    !WITHOUT_UPDATE_CHECK.has(topLevel(cmd).name()) &&
+    ctx.initialized &&
+    !ctx.opts.json &&
+    !ctx.opts.quiet &&
+    ctx.out.stderr.isTTY === true;
+
   const action =
     (handler: Handler) =>
     async (...args: unknown[]): Promise<void> => {
       const cmd = args[args.length - 1] as Command;
-      const code = await handler(makeContext(cmd, io), ...args.slice(0, -1));
-      setExitCode(code ?? 0);
+      const ctx = makeContext(cmd, io);
+      // npm is asked while the command runs, so the check doesn't hold it up.
+      const update = wantsUpdateNote(cmd, ctx) ? startUpdateCheck(VERSION, io.latestVersion) : undefined;
+      try {
+        setExitCode((await handler(ctx, ...args.slice(0, -1))) ?? 0);
+      } catch (err) {
+        update?.cancel();
+        throw err;
+      }
+      const latest = await update?.newer;
+      if (latest) {
+        ctx.out.note(`zetcert ${latest} is available (this is ${VERSION}). To upgrade: npm install -g zetcert@latest, then sudo zetcert init`);
+      }
     };
 
   program

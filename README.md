@@ -135,6 +135,8 @@ sudo zetcert init               # installs the new version
 
 `npm update -g` isn't enough: on 0.x it doesn't even cross a minor version. With nvm, if you installed the new version under another Node version, run `zetcert init` without sudo instead.
 
+When npm has a newer version, zetcert says so at the end of a command's output. It looks once a day, only in a terminal, and it is only a note.
+
 ## Uninstall
 
 ```sh

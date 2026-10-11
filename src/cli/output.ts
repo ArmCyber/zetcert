@@ -73,6 +73,11 @@ export class Output {
     this.stderr.write(`${label} ${loc ? `${formatLoc(loc)}: ` : ''}${text}\n`);
   }
 
+  /** A remark after a command's output that isn't part of its result: on stderr, hidden with -q. */
+  note(text: string): void {
+    if (!this.quiet) this.stderr.write(`\n${this.colorErr ? `\x1b[2m${text}\x1b[0m` : text}\n`);
+  }
+
   /** Columns padded to the widest cell. */
   table(header: string[], rows: string[][]): string[] {
     const widths = header.map((h, i) => Math.max(visibleLength(h), ...rows.map((r) => visibleLength(r[i] ?? ''))));

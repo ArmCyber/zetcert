@@ -7,6 +7,7 @@ export const DNS_DIR = '/etc/zetcert/dns';
 export const SNIPPET_DIR = '/etc/nginx/zetcert';
 export const NGINX_CONFIG = '/etc/nginx/nginx.conf';
 export const STATE_FILE = '/var/lib/zetcert/state.json';
+export const UPDATE_FILE = '/var/lib/zetcert/update.json';
 export const PLACEHOLDER_DIR = '/var/lib/zetcert/placeholder';
 export const LOCK_FILE = '/run/zetcert.lock';
 export const SYSTEM_DIR = '/usr/local/lib/zetcert';

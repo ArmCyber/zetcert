@@ -19,7 +19,7 @@ src/certbot/    command builder, runner, reading certbot's certificates and rene
 src/dns/        driver interface, Cloudflare, Route 53, the test-only challtestsrv driver, zone lookup, propagation
 src/precheck/   pre-checks: DNS, local HTTP, CAA; public addresses; Cloudflare ranges
 src/hooks/      certbot hooks (auth, cleanup, deploy, post) and alerts (notify)
-src/system/     test seams (exec, paths), files, lock, state, the system copy, root check
+src/system/     test seams (exec, paths), files, lock, state, the system copy, root check, the update check
 test/unit/      unit tests (vitest), with fakes for certbot and DNS
 test/fixtures/  real-world nginx configs
 test/e2e/       end-to-end tests in Docker
@@ -28,12 +28,12 @@ docs/           reference.md: every command, setting and file
 
 Data flow: config + nginx config → discovery (server blocks, snippet includes, names) → model (the names each certificate should hold) → planner (compared with what certbot has) → `status` shows it; `sync` runs the pre-checks, certbot, writes the generated files, `nginx -t`, reloads.
 
-Test seams: every external command goes through `src/system/exec.ts` (`setExec` in tests), and every absolute path through `src/system/paths.ts` (`onDisk`; `setRoot` puts the whole tree in a temporary directory in tests). Other seams for tests: `setIsRoot`, `setLookup` (DNS lookups), `setDriverFactory`, `setPropagationDeps`, `setRootUid`.
+Test seams: every external command goes through `src/system/exec.ts` (`setExec` in tests), and every absolute path through `src/system/paths.ts` (`onDisk`; `setRoot` puts the whole tree in a temporary directory in tests). Other seams for tests: `setIsRoot`, `setLookup` (DNS lookups), `setDriverFactory`, `setPropagationDeps`, `setRootUid`, `Io.latestVersion` (the update check's request to npm).
 
 ## Invariants
 
 - Never edit the user's nginx files. zetcert writes only its own files in `/etc/nginx/zetcert/`.
-- `status` is read-only: safe to run on a live server.
+- `status` is read-only: safe to run on a live server. The one file it may write is the update check's own, `/var/lib/zetcert/update.json`.
 - Every external command goes through `src/system/exec.ts`, every absolute path through `src/system/paths.ts`.
 - zetcert's config is the only source of certbot's renewal settings: every `certonly` gets the full flag set (`src/certbot/commands.ts`), because certbot rewrites a certificate's renewal settings from the flags of its last issuance.
 - The `ZETCERT_SYNC` guard: `sync` runs certbot with `ZETCERT_SYNC=1`, and the directory hooks (`hook deploy`, `hook post`) then do nothing; `sync` reloads nginx itself (before validating when it changed zetcert's files, and at the end) and runs the deploy commands itself.
@@ -43,6 +43,7 @@ Test seams: every external command goes through `src/system/exec.ts` (`setExec` 
 - `hook auth` prints only the record reference on stdout (certbot hands it to `hook cleanup` as `CERTBOT_AUTH_OUTPUT`); every log line goes to stderr.
 - DNS drivers add and remove single TXT values and never replace a record set: `_acme-challenge.D` holds the values for both `D` and `*.D`.
 - Test-only code (the challtestsrv DNS driver) is behind `ZETCERT_E2E`, which only `scripts/build.js --e2e` sets; esbuild's `minifySyntax` drops it from the published bundle.
+- The update check (`src/system/update.ts`) only ever leads to a note. It runs for a person at a terminal, never for the certbot hooks, `init`, `uninstall`, `--json`, `-q` or without a terminal on stderr; it never fails or delays a command (npm is asked while the command runs and gets 2 seconds), and every failure is silent.
 
 ## Facts the code relies on
 
@@ -83,6 +84,11 @@ Found while building:
 - certbot 5 (the snap, in CI) reports a failed challenge with `Identifier:` where 4.0 says `Domain:`.
 - Node 26 (libuv 1.52) `fs.copyFileSync` keeps the source's owner; Node 20 gives the copy to the running user. `copyFileAtomic` chowns the copy, or root's copy of an nvm Node stays the user's.
 - certbot's renewal files (`/etc/letsencrypt/renewal/<cert>.conf`) are ConfigObj: `[renewalparams]`, `[[webroot_map]]`, comma lists (`a,` is a one-item list). `--deploy-hook` is saved as `renew_hook`, or `deploy_hook` in newer versions.
+- npm: `https://registry.npmjs.org/<package>/latest` answers with the manifest of the latest version (about 2 kB, `version` in it), without a redirect.
+- Stopping a request, measured on Node 20 and 26 for the update check:
+  - after an aborted `fetch` to an address that doesn't answer, the process stays alive until fetch's own 10-second connect timeout; `https.get` with a `signal` drops the socket at once;
+  - the system lookup (getaddrinfo) can't be cancelled: with a DNS server that doesn't answer, the process stayed alive for 20 seconds. `dns.Resolver` (c-ares) can, with `cancel()`;
+  - c-ares 1.34 gives a DNS server that doesn't answer twice the `timeout` option before it asks the next one, and on Node 20 such a resolver keeps the process alive for one more `timeout` unless it is cancelled.
 
 ## Working on the code
 
